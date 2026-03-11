@@ -502,21 +502,41 @@ for page in range(1,10):
     response = requests.post(url, json = payload, headers = headers, cookies = cookies)
 
     if response.status_code == 200:
-        print("wow!")
+        print("Success!")
         data = response.json()
-        print(data)
-        
-        if page == 0:
+        # print(data)
+    
+        if page == 1:
             print("Response keys: ", data.keys())
-            print("Total results reported: ", data.get('TotalRows', 'Unknown'))
+            print("Total results reported: ", data.get('TotalRows', 'Unknown')) #this makes no sense
 
+        # #api gives double nested structure
+        results_wrapper_list = data['Result']
+        print(results_wrapper_list)
+        # check
+        if len(results_wrapper_list) == 0:
+            print(f"Page {page} - No 'Result' key found or empty. Stopping.")
+            break
 
-        results = data['Result'] # EnerGov usually puts results here
+        # # actually getting the results
+        results = results_wrapper_list['EntityResults']
+        print(results)
+
         if not results:
+            print(f"Page {page} was empty or 'EntityResults' missing, stopping.")
+            break
+
+        # # if it is a list, extend, dict then append
+        if isinstance(results, list):
+            all_results.extend(results)
+            print(f"Grabbed page {page} as list")  
+        elif isinstance(results, dict):
+            all_results.append(results)
+            print(f"Grabbed 1 record from page {page} as dict")  
+        else:
             print(f"Page {page} was empty, stopping")
             break # Stop if we hit an empty page
-        all_results.extend(results)
-        print(f"Grabbed page {page}")   
+
     else: 
         print(f"Failed with Status Code: {response.status_code}")
         print(f"Server message: {response.text[:5000]}") # Show first 500 chars of error
@@ -524,3 +544,15 @@ for page in range(1,10):
         
     
 print(f"Total records found: {len(all_results)}")   
+
+# # making and writing the file:
+print([type(i) for i in all_results[:10]])
+df = pd.json_normalize(all_results)
+df = pd.DataFrame(all_results)
+path = 'data'
+if not os.path.exists(path):
+    os.makedirs(path)
+
+filename = f"hawaii-county-{payload["PlanCriteria"]["ApplyDateFrom"]}-{payload["PlanCriteria"]["ApplyDateTo"]}"
+df.to_csv(f"{path}/{filename}.csv", index = False)
+
